@@ -1,8 +1,7 @@
 from itertools import islice
 
 import pytest
-import gym
-import jax
+import gymnasium
 import jax.numpy as jnp
 from numpy.testing import assert_array_almost_equal
 
@@ -12,7 +11,7 @@ from ._montecarlo import MonteCarlo
 
 
 class MockEnv:
-    action_space = gym.spaces.Discrete(10)
+    action_space = gymnasium.spaces.Discrete(10)
 
 
 class TestMonteCarlo:
@@ -40,7 +39,7 @@ class TestMonteCarlo:
     D = jnp.array([False] * 12 + [True])
     G = jnp.zeros_like(R)
     for i, r in enumerate(R[::-1]):
-        G = jax.ops.index_update(G, i, r + gamma * G[i - 1])
+        G = G.at[i].set(r + gamma * G[i - 1])
     G = G[::-1]
     episode = list(zip(S, A, R, D))
 

@@ -3,7 +3,7 @@ from typing import Any, Tuple, NamedTuple
 
 import jax
 import haiku as hk
-from gym.spaces import Space
+from gymnasium.spaces import Space
 
 from ..typing import Batch, Observation, Action
 from ..utils import pretty_repr, jit
@@ -58,13 +58,14 @@ class BaseFunc(ABC, RandomStateMixin, CopyMixin):
 
         if not isinstance(observation_space, Space):
             raise TypeError(
-                f"observation_space must be derived from gym.Space, got: {type(observation_space)}")
+                "observation_space must be derived from gymnasium.Space, "
+                f"got: {type(observation_space)}")
         self.observation_space = observation_space
 
         if action_space is not None:
             if not isinstance(action_space, Space):
                 raise TypeError(
-                    f"action_space must be derived from gym.Space, got: {type(action_space)}")
+                    f"action_space must be derived from gymnasium.Space, got: {type(action_space)}")
             self.action_space = action_space
 
         self.random_seed = random_seed  # also initializes self.rng via RandomStateMixin
@@ -85,7 +86,7 @@ class BaseFunc(ABC, RandomStateMixin, CopyMixin):
         self._check_output(output, example_data.output)
 
         def soft_update_func(old, new, tau):
-            return jax.tree_multimap(lambda a, b: (1 - tau) * a + tau * b, old, new)
+            return jax.tree_map(lambda a, b: (1 - tau) * a + tau * b, old, new)
 
         self._soft_update_func = jit(soft_update_func)
 
@@ -122,7 +123,7 @@ class BaseFunc(ABC, RandomStateMixin, CopyMixin):
 
     @params.setter
     def params(self, new_params):
-        if jax.tree_structure(new_params) != jax.tree_structure(self._params):
+        if jax.tree_util.tree_structure(new_params) != jax.tree_util.tree_structure(self._params):
             raise TypeError("new params must have the same structure as old params")
         self._params = new_params
 
@@ -147,7 +148,9 @@ class BaseFunc(ABC, RandomStateMixin, CopyMixin):
 
     @function_state.setter
     def function_state(self, new_function_state):
-        if jax.tree_structure(new_function_state) != jax.tree_structure(self._function_state):
+        new_tree_structure = jax.tree_util.tree_structure(new_function_state)
+        tree_structure = jax.tree_util.tree_structure(self._function_state)
+        if new_tree_structure != tree_structure:
             raise TypeError("new function_state must have the same structure as old function_state")
         self._function_state = new_function_state
 

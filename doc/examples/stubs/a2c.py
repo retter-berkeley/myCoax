@@ -1,24 +1,35 @@
-import gym
+import gymnasium
 import coax
 import optax
 import haiku as hk
 
 
 # pick environment
-env = gym.make(...)
+env = gymnasium.make(...)
 env = coax.wrappers.TrainMonitor(env)
+
+
+def torso(S, is_training):
+    # custom haiku function for the shared preprocessor
+    with hk.experimental.name_scope('torso'):
+        net = hk.Sequential([...])
+    return net(S)
 
 
 def func_v(S, is_training):
     # custom haiku function
-    value = hk.Sequential([...])
-    return value(S)  # output shape: (batch_size,)
+    X = torso(S, is_training)
+    with hk.experimental.name_scope('v'):
+        value = hk.Sequential([...])
+    return value(X)  # output shape: (batch_size,)
 
 
 def func_pi(S, is_training):
     # custom haiku function (for discrete actions in this example)
-    logits = hk.Sequential([...])
-    return {'logits': logits(S)}  # logits shape: (batch_size, num_actions)
+    X = torso(S, is_training)
+    with hk.experimental.name_scope('pi'):
+        logits = hk.Sequential([...])
+    return {'logits': logits(X)}  # logits shape: (batch_size, num_actions)
 
 
 # function approximators
@@ -37,16 +48,16 @@ buffer = coax.experience_replay.SimpleReplayBuffer(capacity=256)
 
 
 for ep in range(100):
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a, logp = pi(s, return_logp=True)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # add transition to buffer
         # N.B. vanilla-pg doesn't use logp but we include it to make it easy to
         # swap in another policy updater that does require it, e.g. ppo-clip
-        tracer.add(s, a, r, done, logp)
+        tracer.add(s, a, r, done or truncated, logp)
         while tracer:
             buffer.add(tracer.pop())
 
@@ -59,9 +70,12 @@ for ep in range(100):
                 env.record_metrics(metrics_v)
                 env.record_metrics(metrics_pi)
 
+                # optional: sync shared parameters (this is not always optimal)
+                pi.params, v.params = coax.utils.sync_shared_params(pi.params, v.params)
+
             buffer.clear()
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next

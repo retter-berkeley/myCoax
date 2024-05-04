@@ -1,5 +1,5 @@
 import coax
-import gym
+import gymnasium
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -8,7 +8,7 @@ from matplotlib import pyplot as plt
 
 
 # the MDP
-env = gym.make('FrozenLakeNonSlippery-v0')
+env = gymnasium.make('FrozenLakeNonSlippery-v0')
 env = coax.wrappers.TrainMonitor(env)
 
 
@@ -33,23 +33,23 @@ esarsa = coax.td_learning.ExpectedSarsa(q, pi, optimizer=optax.adam(0.02))
 
 # train
 for ep in range(500):
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a = pi(s)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # small incentive to keep moving
         if jnp.array_equal(s_next, s):
             r = -0.01
 
         # update
-        tracer.add(s, a, r, done)
+        tracer.add(s, a, r, done or truncated)
         while tracer:
             transition_batch = tracer.pop()
             esarsa.update(transition_batch)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next
@@ -60,7 +60,7 @@ for ep in range(500):
 
 
 # run env one more time to render
-s = env.reset()
+s, info = env.reset()
 env.render()
 
 for t in range(env.spec.max_episode_steps):
@@ -83,11 +83,11 @@ for t in range(env.spec.max_episode_steps):
     plt.show()
 
     a = pi.mode(s)
-    s, r, done, info = env.step(a)
+    s, r, done, truncated, info = env.step(a)
 
     env.render()
 
-    if done:
+    if done or truncated:
         break
 
 

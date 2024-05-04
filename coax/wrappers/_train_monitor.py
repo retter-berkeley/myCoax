@@ -1,6 +1,7 @@
 import os
 import re
 import datetime
+import logging
 import time
 from collections import deque
 from typing import Mapping
@@ -8,8 +9,8 @@ from typing import Mapping
 import numpy as np
 import lz4.frame
 import cloudpickle as pickle
-from gym import Wrapper
-from gym.spaces import Discrete
+from gymnasium import Wrapper
+from gymnasium.spaces import Discrete
 from tensorboardX import SummaryWriter
 
 from .._base.mixins import LoggerMixin
@@ -63,9 +64,9 @@ class TrainMonitor(Wrapper, LoggerMixin):
 
     Parameters
     ----------
-    env : gym environment
+    env : gymnasium environment
 
-        A gym environment.
+        A gymnasium environment.
 
     tensorboard_dir : str, optional
 
@@ -150,6 +151,7 @@ class TrainMonitor(Wrapper, LoggerMixin):
         self.smoothing = float(smoothing)
         self.reset_global()
         enable_logging(**logger_kwargs)
+        self.logger.setLevel(logger_kwargs.get('level', logging.INFO))
         self._init_tensorboard(tensorboard_dir)
 
     def reset_global(self):
@@ -197,19 +199,19 @@ class TrainMonitor(Wrapper, LoggerMixin):
 
     def step(self, a):
         self._ep_actions.append(a)
-        s_next, r, done, info = self.env.step(a)
+        s_next, r, done, truncated, info = self.env.step(a)
         if info is None:
             info = {}
         info['monitor'] = {'T': self.T, 'ep': self.ep}
         self.t += 1
         self.T += 1
         self.G += r
-        if done:
+        if done or truncated:
             if self._n_avg_G < self.smoothing:
                 self._n_avg_G += 1.
             self.avg_G += (self.G - self.avg_G) / self._n_avg_G
 
-        return s_next, r, done, info
+        return s_next, r, done, truncated, info
 
     def record_metrics(self, metrics):
         r"""

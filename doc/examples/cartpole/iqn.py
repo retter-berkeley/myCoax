@@ -1,5 +1,5 @@
 import coax
-import gym
+import gymnasium
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -10,25 +10,21 @@ from optax import adam
 # the name of this script
 name = 'iqn'
 # the cart-pole MDP
-env = gym.make('CartPole-v0')
+env = gymnasium.make('CartPole-v0', render_mode='rgb_array')
 env = coax.wrappers.TrainMonitor(
     env, name=name, tensorboard_dir=f"./data/tensorboard/{name}")
-quantile_embedding_dim = 32
+quantile_embedding_dim = 64
 layer_size = 256
 num_quantiles = 32
 
 
 def quantile_net(x, quantile_fractions):
-    x_size = x.shape[-1]
-    x_tiled = jnp.tile(x[:, None, :], [num_quantiles, 1])
     quantiles_emb = coax.utils.quantile_cos_embedding(
         quantile_fractions, quantile_embedding_dim)
-    quantiles_emb = hk.Linear(x_size)(quantiles_emb)
-    quantiles_emb = hk.LayerNorm(axis=-1, create_scale=True,
-                                 create_offset=True)(quantiles_emb)
-    quantiles_emb = jax.nn.sigmoid(quantiles_emb)
-    x = x_tiled * quantiles_emb
-    x = hk.Linear(x_size)(x)
+    quantiles_emb = hk.Linear(x.shape[-1])(quantiles_emb)
+    quantiles_emb = jax.nn.relu(quantiles_emb)
+    x = x[:, None, :] * quantiles_emb
+    x = hk.Linear(layer_size)(x)
     x = jax.nn.relu(x)
     return x
 
@@ -39,9 +35,9 @@ def func(S, A, is_training):
         hk.Flatten(), hk.Linear(layer_size), jax.nn.relu
     ))
     quantile_fractions = coax.utils.quantiles_uniform(rng=hk.next_rng_key(),
-                                              batch_size=jax.tree_leaves(S)[0].shape[0],
-                                              num_quantiles=num_quantiles)
-    X = jax.vmap(jnp.kron)(S, A)
+                                                      batch_size=S.shape[0],
+                                                      num_quantiles=num_quantiles)
+    X = jnp.concatenate((S, A), axis=-1)
     x = encoder(X)
     quantile_x = quantile_net(x, quantile_fractions=quantile_fractions)
     quantile_values = hk.Linear(1, w_init=jnp.zeros)(quantile_x)
@@ -61,26 +57,25 @@ tracer = coax.reward_tracing.NStep(n=1, gamma=0.9)
 buffer = coax.experience_replay.SimpleReplayBuffer(capacity=100000)
 
 # updater
-qlearning = coax.td_learning.QLearning(q, q_targ=q_targ, optimizer=adam(0.001))
+qlearning = coax.td_learning.QLearning(q, q_targ=q_targ, optimizer=adam(1e-3))
 
 
 # train
 for ep in range(1000):
-    s = env.reset()
+    s, info = env.reset()
     # pi.epsilon = max(0.01, pi.epsilon * 0.95)
     # env.record_metrics({'EpsilonGreedy/epsilon': pi.epsilon})
 
     for t in range(env.spec.max_episode_steps):
         a = pi(s)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # extend last reward as asymptotic best-case return
-        if t == env.spec.max_episode_steps - 1:
-            assert done
+        if truncated:
             r = 1 / (1 - tracer.gamma)  # gamma + gamma^2 + gamma^3 + ... = 1 / (1 - gamma)
 
         # trace rewards and add transition to replay buffer
-        tracer.add(s, a, r, done)
+        tracer.add(s, a, r, done or truncated)
         while tracer:
             buffer.add(tracer.pop())
 
@@ -93,7 +88,7 @@ for ep in range(1000):
         # sync target network
         q_targ.soft_update(q, tau=0.01)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next

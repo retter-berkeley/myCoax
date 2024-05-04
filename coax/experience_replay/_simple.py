@@ -1,5 +1,4 @@
 import random
-from collections import deque
 
 import jax
 import numpy as onp
@@ -58,6 +57,8 @@ class SimpleReplayBuffer(BaseReplayBuffer):
         transition_batch.idx = onp.arange(self._index, self._index + transition_batch.batch_size)
         self._index += transition_batch.batch_size
         self._storage.extend(transition_batch.to_singles())
+        while len(self) > self.capacity:
+            self._storage.pop(0)
 
     def sample(self, batch_size=32):
         r"""
@@ -80,11 +81,11 @@ class SimpleReplayBuffer(BaseReplayBuffer):
         random.setstate(self._random_state)
         transitions = random.sample(self._storage, batch_size)
         self._random_state = random.getstate()
-        return jax.tree_multimap(lambda *leaves: onp.concatenate(leaves, axis=0), *transitions)
+        return jax.tree_map(lambda *leaves: onp.concatenate(leaves, axis=0), *transitions)
 
     def clear(self):
         r""" Clear the experience replay buffer. """
-        self._storage = deque(maxlen=self.capacity)
+        self._storage = list()
         self._index = 0
 
     def __len__(self):

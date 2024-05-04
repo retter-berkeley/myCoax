@@ -1,8 +1,9 @@
 from enum import Enum
 
-import gym
+import gymnasium
 import numpy as onp
 import haiku as hk
+import jax
 
 from ..utils import jit
 from ._base import BaseProbaDist
@@ -30,10 +31,10 @@ class ProbaDist(BaseProbaDist):
 
     Parameters
     ----------
-    space : gym.Space
+    space : gymnasium.Space
 
-        The gym-style space that specifies the domain of the distribution. This may be any space
-        included in the :mod:`gym.spaces` module.
+        The gymnasium-style space that specifies the domain of the distribution. This may be any
+        space included in the :mod:`gymnasium.spaces` module.
 
     """
     __slots__ = BaseProbaDist.__slots__ + ('_structure', '_structure_type')
@@ -41,22 +42,22 @@ class ProbaDist(BaseProbaDist):
     def __init__(self, space):
         super().__init__(space)
 
-        if isinstance(self.space, gym.spaces.Discrete):
+        if isinstance(self.space, gymnasium.spaces.Discrete):
             self._structure_type = StructureType.LEAF
             self._structure = CategoricalDist(space)
-        elif isinstance(self.space, gym.spaces.Box):
+        elif isinstance(self.space, gymnasium.spaces.Box):
             self._structure_type = StructureType.LEAF
             self._structure = NormalDist(space)
-        elif isinstance(self.space, gym.spaces.MultiDiscrete):
+        elif isinstance(self.space, gymnasium.spaces.MultiDiscrete):
             self._structure_type = StructureType.LIST
-            self._structure = [self.__class__(gym.spaces.Discrete(n)) for n in space.nvec]
-        elif isinstance(self.space, gym.spaces.MultiBinary):
+            self._structure = [self.__class__(gymnasium.spaces.Discrete(n)) for n in space.nvec]
+        elif isinstance(self.space, gymnasium.spaces.MultiBinary):
             self._structure_type = StructureType.LIST
-            self._structure = [self.__class__(gym.spaces.Discrete(2)) for _ in range(space.n)]
-        elif isinstance(self.space, gym.spaces.Tuple):
+            self._structure = [self.__class__(gymnasium.spaces.Discrete(2)) for _ in range(space.n)]
+        elif isinstance(self.space, gymnasium.spaces.Tuple):
             self._structure_type = StructureType.LIST
             self._structure = [self.__class__(sp) for sp in space.spaces]
-        elif isinstance(self.space, gym.spaces.Dict):
+        elif isinstance(self.space, gymnasium.spaces.Dict):
             self._structure_type = StructureType.DICT
             self._structure = {k: self.__class__(sp) for k, sp in space.spaces.items()}
         else:
@@ -174,22 +175,25 @@ class ProbaDist(BaseProbaDist):
             raise AssertionError(f"bad structure_type: {self._structure_type}")
 
         def affine_transform(dist_params, scale, shift, value_transform=None):
+            if value_transform is None:
+                value_transform = jax.tree_map(lambda _: None, self._structure)
+
             if self._structure_type == StructureType.LEAF:
                 return self._structure.affine_transform(dist_params, scale, shift, value_transform)
 
             if self._structure_type == StructureType.LIST:
                 assert len(dist_params) == len(scale) == len(shift) == len(self._structure)
-                assert value_transform is None or len(value_transform) == len(self._structure)
-                return sum(
+                assert len(value_transform) == len(self._structure)
+                return [
                     dist.affine_transform(dist_params[i], scale[i], shift[i], value_transform[i])
-                    for i, dist in enumerate(self._structure))
+                    for i, dist in enumerate(self._structure)]
 
             if self._structure_type == StructureType.DICT:
                 assert set(dist_params) == set(scale) == set(shift) == set(self._structure)
-                assert value_transform is None or set(value_transform) == set(self._structure)
-                return sum(
-                    dist.affine_transform(dist_params[k], scale[k], shift[k], value_transform[k])
-                    for k, dist in self._structure.items())
+                assert set(value_transform) == set(self._structure)
+                return {
+                    k: dist.affine_transform(dist_params[k], scale[k], shift[k], value_transform[k])
+                    for k, dist in self._structure.items()}
 
             raise AssertionError(f"bad structure_type: {self._structure_type}")
 
@@ -235,19 +239,19 @@ class ProbaDist(BaseProbaDist):
             return self._structure.postprocess_variate(
                 next(rngs), X, index=index, batch_mode=batch_mode)
 
-        if isinstance(self.space, (gym.spaces.MultiDiscrete, gym.spaces.MultiBinary)):
+        if isinstance(self.space, (gymnasium.spaces.MultiDiscrete, gymnasium.spaces.MultiBinary)):
             assert self._structure_type == StructureType.LIST
             return onp.stack([
                 dist.postprocess_variate(next(rngs), X[i], index=index, batch_mode=batch_mode)
                 for i, dist in enumerate(self._structure)], axis=-1)
 
-        if isinstance(self.space, gym.spaces.Tuple):
+        if isinstance(self.space, gymnasium.spaces.Tuple):
             assert self._structure_type == StructureType.LIST
             return tuple(
                 dist.postprocess_variate(next(rngs), X[i], index=index, batch_mode=batch_mode)
                 for i, dist in enumerate(self._structure))
 
-        if isinstance(self.space, gym.spaces.Dict):
+        if isinstance(self.space, gymnasium.spaces.Dict):
             assert self._structure_type == StructureType.DICT
             return {
                 k: dist.postprocess_variate(next(rngs), X[k], index=index, batch_mode=batch_mode)
@@ -262,6 +266,12 @@ class ProbaDist(BaseProbaDist):
 
         if self._structure_type == StructureType.LEAF:
             return self._structure.preprocess_variate(next(rngs), X)
+
+        if isinstance(self.space, (gymnasium.spaces.MultiDiscrete, gymnasium.spaces.MultiBinary)):
+            assert self._structure_type == StructureType.LIST
+            return [
+                dist.preprocess_variate(next(rngs), X[..., i])
+                for i, dist in enumerate(self._structure)]
 
         if self._structure_type == StructureType.LIST:
             return [

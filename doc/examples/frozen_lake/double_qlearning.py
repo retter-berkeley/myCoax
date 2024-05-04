@@ -1,5 +1,5 @@
 import coax
-import gym
+import gymnasium
 import jax
 import jax.numpy as jnp
 import haiku as hk
@@ -7,7 +7,7 @@ import optax
 
 
 # the MDP
-env = gym.make('FrozenLakeNonSlippery-v0')
+env = gymnasium.make('FrozenLakeNonSlippery-v0')
 env = coax.wrappers.TrainMonitor(env)
 
 
@@ -36,18 +36,18 @@ qlearning = coax.td_learning.DoubleQLearning(q, q_targ=q_targ, optimizer=optax.a
 
 # train
 for ep in range(500):
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a = pi(s)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # small incentive to keep moving
         if jnp.array_equal(s_next, s):
             r = -0.01
 
         # update
-        tracer.add(s, a, r, done)
+        tracer.add(s, a, r, done or truncated)
         while tracer:
             transition_batch = tracer.pop()
             qlearning.update(transition_batch)
@@ -55,7 +55,7 @@ for ep in range(500):
             # sync target network
             q_targ.soft_update(q, tau=0.1)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next
@@ -66,7 +66,7 @@ for ep in range(500):
 
 
 # run env one more time to render
-s = env.reset()
+s, info = env.reset()
 env.render()
 
 for t in range(env.spec.max_episode_steps):
@@ -76,11 +76,11 @@ for t in range(env.spec.max_episode_steps):
         print("  q(s,{:s}) = {:.3f}".format('LDRU'[i], q_))
 
     a = pi.mode(s)
-    s, r, done, info = env.step(a)
+    s, r, done, truncated, info = env.step(a)
 
     env.render()
 
-    if done:
+    if done or truncated:
         break
 
 

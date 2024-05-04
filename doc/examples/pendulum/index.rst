@@ -1,7 +1,7 @@
 Pendulum
 ========
 
-In these notebooks we solve the `Pendulum <https://gym.openai.com/envs/Pendulum-v0/>`_ environment.
+In these notebooks we solve the `Pendulum <https://gymnasium.farama.org/environments/classic_control/pendulum/>`_ environment.
 
 
 .. toctree::
@@ -11,3 +11,5 @@ In these notebooks we solve the `Pendulum <https://gym.openai.com/envs/Pendulum-
     PPO <ppo>
     TD3 <td3>
     SAC <sac>
+    TD4 <td4>
+    DSAC <dsac>

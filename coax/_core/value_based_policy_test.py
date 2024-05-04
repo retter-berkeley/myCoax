@@ -1,6 +1,6 @@
 from functools import partial
 
-import gym
+import gymnasium
 import jax
 import haiku as hk
 import numpy as onp
@@ -10,7 +10,7 @@ from .q import Q
 from .value_based_policy import EpsilonGreedy, BoltzmannPolicy
 
 
-env = gym.make('FrozenLakeNonSlippery-v0')
+env = gymnasium.make('FrozenLakeNonSlippery-v0')
 
 
 def func_type2(S, is_training):
@@ -28,7 +28,7 @@ def func_type2(S, is_training):
 
 class TestEpsilonGreedy(TestCase):
     def setUp(self):
-        self.env = gym.make('FrozenLakeNonSlippery-v0')
+        self.env = gymnasium.make('FrozenLakeNonSlippery-v0')
         self.q = Q(func_type2, env)
 
     def tearDown(self):
@@ -36,19 +36,19 @@ class TestEpsilonGreedy(TestCase):
 
     def test_call(self):
         pi = EpsilonGreedy(self.q, epsilon=0.1)
-        s = self.env.reset()
+        s, info = self.env.reset()
         for t in range(self.env.spec.max_episode_steps):
             a = pi(s)
-            s, r, done, info = self.env.step(a)
+            s, r, done, truncated, info = self.env.step(a)
             if done:
                 break
 
     def test_greedy(self):
         pi = EpsilonGreedy(self.q, epsilon=0.1)
-        s = self.env.reset()
+        s, info = self.env.reset()
         for t in range(self.env.spec.max_episode_steps):
             a = pi.mode(s)
-            s, r, done, info = self.env.step(a)
+            s, r, done, truncated, info = self.env.step(a)
             if done:
                 break
 
@@ -66,7 +66,7 @@ class TestEpsilonGreedy(TestCase):
 
 class TestBoltzmannPolicy(TestCase):
     def setUp(self):
-        self.env = gym.make('FrozenLakeNonSlippery-v0')
+        self.env = gymnasium.make('FrozenLakeNonSlippery-v0')
         self.q = Q(func_type2, env)
 
     def tearDown(self):
@@ -74,19 +74,19 @@ class TestBoltzmannPolicy(TestCase):
 
     def test_call(self):
         pi = BoltzmannPolicy(self.q, temperature=1.0)
-        s = self.env.reset()
+        s, info = self.env.reset()
         for t in range(self.env.spec.max_episode_steps):
             a = pi(s)
-            s, r, done, info = self.env.step(a)
+            s, r, done, truncated, info = self.env.step(a)
             if done:
                 break
 
     def test_greedy(self):
         pi = BoltzmannPolicy(self.q, temperature=1.0)
-        s = self.env.reset()
+        s, info = self.env.reset()
         for t in range(self.env.spec.max_episode_steps):
             a = pi.mode(s)
-            s, r, done, info = self.env.step(a)
+            s, r, done, truncated, info = self.env.step(a)
             if done:
                 break
 

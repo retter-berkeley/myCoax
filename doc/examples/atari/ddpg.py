@@ -5,7 +5,7 @@ os.environ.setdefault('JAX_PLATFORM_NAME', 'gpu')     # tell JAX to use GPU
 os.environ['XLA_PYTHON_CLIENT_MEM_FRACTION'] = '0.1'  # don't use all gpu mem
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'              # tell XLA to be quiet
 
-import gym
+import gymnasium
 import jax
 import coax
 import haiku as hk
@@ -17,9 +17,10 @@ from optax import adam
 name = 'ddpg'
 
 # env with preprocessing
-env = gym.make('PongNoFrameskip-v4')
-env = gym.wrappers.AtariPreprocessing(env)
+env = gymnasium.make('PongNoFrameskip-v4', render_mode='rgb_array')
+env = gymnasium.wrappers.AtariPreprocessing(env)
 env = coax.wrappers.FrameStacking(env, num_frames=3)
+env = gymnasium.wrappers.TimeLimit(env, max_episode_steps=108000 // 3)
 env = coax.wrappers.TrainMonitor(env, name=name, tensorboard_dir=f"./data/tensorboard/{name}")
 
 
@@ -74,11 +75,11 @@ buffer = coax.experience_replay.SimpleReplayBuffer(capacity=1000000)
 
 
 while env.T < 3000000:
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a, logp = pi(s, return_logp=True)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # trace rewards and add transition to replay buffer
         tracer.add(s, a, r, done, logp)
@@ -95,7 +96,7 @@ while env.T < 3000000:
             pi_targ.soft_update(pi, tau=1)
             q_targ.soft_update(q, tau=1)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next

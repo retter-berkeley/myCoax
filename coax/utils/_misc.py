@@ -323,9 +323,9 @@ def render_episode(env, policy=None, step_delay_ms=0):
 
     Parameters
     ----------
-    env : gym environment
+    env : gymnasium environment
 
-        A gym environment.
+        A gymnasium environment.
 
     policy : callable, optional
 
@@ -366,7 +366,7 @@ def has_env_attr(env, attr, max_depth=100):
 
     Parameters
     ----------
-    env : gym environment
+    env : gymnasium environment
 
         A potentially wrapped environment.
 
@@ -401,7 +401,7 @@ def get_env_attr(env, attr, default='__ERROR__', max_depth=100):
 
     Parameters
     ----------
-    env : gym environment
+    env : gymnasium environment
 
         A potentially wrapped environment.
 
@@ -434,7 +434,7 @@ def generate_gif(env, filepath, policy=None, resize_to=None, duration=50, max_ep
 
     Parameters
     ----------
-    env : gym environment
+    env : gymnasium environment
 
         The environment to record from.
 
@@ -472,15 +472,20 @@ def generate_gif(env, filepath, policy=None, resize_to=None, duration=50, max_ep
     if isinstance(env, TrainMonitor):
         env = env.env  # unwrap to strip off TrainMonitor
 
+    s, info = env.reset()
+
+    # check if render_mode is set to 'rbg_array'
+    if not (env.render_mode == 'rgb_array' or isinstance(env.render(), onp.ndarray)):
+        raise RuntimeError("Cannot generate GIF if env.render_mode != 'rgb_array'.")
+
     # collect frames
     frames = []
-    s = env.reset()
     for t in range(max_episode_steps):
         a = env.action_space.sample() if policy is None else policy(s)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # store frame
-        frame = env.render(mode='rgb_array')
+        frame = env.render()
         frame = Image.fromarray(frame)
         frame = frame.convert('P', palette=Image.ADAPTIVE)
         if resize_to is not None:
@@ -491,13 +496,13 @@ def generate_gif(env, filepath, policy=None, resize_to=None, duration=50, max_ep
 
         frames.append(frame)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next
 
     # store last frame
-    frame = env.render(mode='rgb_array')
+    frame = env.render()
     frame = Image.fromarray(frame)
     frame = frame.convert('P', palette=Image.ADAPTIVE)
     if resize_to is not None:

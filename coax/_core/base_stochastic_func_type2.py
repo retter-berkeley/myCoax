@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 import haiku as hk
-from gym.spaces import Space
+from gymnasium.spaces import Space
 
 from ..utils import safe_sample, batch_to_single, jit
 from .base_func import BaseFunc, ExampleData, Inputs, ArgsType2
@@ -22,9 +22,9 @@ class StochasticFuncType2Mixin:
 
     An mix-in class for stochastic functions that take *only states* as input:
 
-    - Policy
-    - StochasticV
-    - StateDensity
+    * Policy
+    * StochasticV
+    * StateDensity
 
     """
     def __call__(self, s, return_logp=False):
@@ -116,9 +116,9 @@ class BaseStochasticFuncType2(BaseFunc, StochasticFuncType2Mixin):
 
     An abstract base class for stochastic function that take *only states* as input:
 
-    - Policy
-    - StochasticV
-    - StateDensity
+    * Policy
+    * StochasticV
+    * StateDensity
 
     """
     def __init__(
@@ -142,11 +142,12 @@ class BaseStochasticFuncType2(BaseFunc, StochasticFuncType2Mixin):
 
         if not isinstance(env.observation_space, Space):
             raise TypeError(
-                "env.observation_space must be derived from gym.Space, "
+                "env.observation_space must be derived from gymnasium.Space, "
                 f"got: {type(env.observation_space)}")
         if not isinstance(env.action_space, Space):
             raise TypeError(
-                f"env.action_space must be derived from gym.Space, got: {type(env.action_space)}")
+                "env.action_space must be derived from gymnasium.Space, "
+                f"got: {type(env.action_space)}")
 
         # these must be provided
         assert observation_preprocessor is not None
@@ -158,7 +159,7 @@ class BaseStochasticFuncType2(BaseFunc, StochasticFuncType2Mixin):
         # input: state observations
         S = [safe_sample(env.observation_space, rnd) for _ in range(batch_size)]
         S = [observation_preprocessor(next(rngs), s) for s in S]
-        S = jax.tree_multimap(lambda *x: jnp.concatenate(x, axis=0), *S)
+        S = jax.tree_map(lambda *x: jnp.concatenate(x, axis=0), *S)
 
         # output
         dist_params = jax.tree_map(
@@ -185,8 +186,8 @@ class BaseStochasticFuncType2(BaseFunc, StochasticFuncType2Mixin):
         )
 
     def _check_output(self, actual, expected):
-        expected_leaves, expected_structure = jax.tree_flatten(expected)
-        actual_leaves, actual_structure = jax.tree_flatten(actual)
+        expected_leaves, expected_structure = jax.tree_util.tree_flatten(expected)
+        actual_leaves, actual_structure = jax.tree_util.tree_flatten(actual)
         assert all(isinstance(x, jnp.ndarray) for x in expected_leaves), "bad example_data"
 
         if actual_structure != expected_structure:
@@ -201,7 +202,7 @@ class BaseStochasticFuncType2(BaseFunc, StochasticFuncType2Mixin):
                 f"found leaves of type: {bad_types}")
 
         if not all(a.shape == b.shape for a, b in zip(actual_leaves, expected_leaves)):
-            shapes_tree = jax.tree_multimap(
+            shapes_tree = jax.tree_map(
                 lambda a, b: f"{a.shape} {'!=' if a.shape != b.shape else '=='} {b.shape}",
                 actual, expected)
             raise TypeError(f"found leaves with unexpected shapes: {shapes_tree}")

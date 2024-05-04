@@ -1,12 +1,12 @@
 import inspect
 
-import gym
+import gymnasium
 
 
-class MetaPolicyEnv(gym.Wrapper):
+class MetaPolicyEnv(gymnasium.Wrapper):
     r"""
 
-    Wrap a gym-style environment such that it may be used by a meta-policy,
+    Wrap a gymnasium-style environment such that it may be used by a meta-policy,
     i.e. a bandit that selects a policy (an *arm*), which is then used to
     sample a lower-level action and fed the original environment. In other
     words, the actions that the :attr:`step` method expects are *meta-actions*,
@@ -16,7 +16,7 @@ class MetaPolicyEnv(gym.Wrapper):
 
     Parameters
     ----------
-    env : gym-style environment
+    env : gymnasium-style environment
 
         The original environment to be wrapped into a meta-policy env.
 
@@ -31,12 +31,12 @@ class MetaPolicyEnv(gym.Wrapper):
     def __init__(self, env, *arms):
         super().__init__(env)
         self.arms = arms
-        self.action_space = gym.spaces.Discrete(len(arms))
+        self.action_space = gymnasium.spaces.Discrete(len(arms))
         self._s = None
 
     def reset(self):
-        self._s = self.env.reset()
-        return self._s
+        self._s, info = self.env.reset()
+        return self._s, info
 
     def step(self, a_meta):
         assert self.action_space.contains(a_meta), "a_meta is invalid"
@@ -48,7 +48,7 @@ class MetaPolicyEnv(gym.Wrapper):
         else:
             a, logp = pi(self._s), 0.
 
-        self._s, r, done, info = self.env.step(a)
+        self._s, r, done, truncated, info = self.env.step(a)
         info = info or {}
         info.update({'a': a, 'logp': logp})
-        return self._s, r, done, info
+        return self._s, r, done, truncated, info

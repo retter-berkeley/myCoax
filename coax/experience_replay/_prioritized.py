@@ -208,7 +208,7 @@ class PrioritizedReplayBuffer(BaseReplayBuffer):
     def clear(self):
         r""" Clear the experience replay buffer. """
         self._storage = onp.full(shape=(self.capacity,), fill_value=None, dtype='object')
-        self._sumtree = SumTree(capacity=self.capacity)
+        self._sumtree = SumTree(capacity=self.capacity, random_seed=self._random_seed)
         self._index = 0
 
     def __len__(self):
@@ -222,7 +222,7 @@ class PrioritizedReplayBuffer(BaseReplayBuffer):
 
 
 def _concatenate_leaves(pytrees):
-    return jax.tree_multimap(lambda *leaves: onp.concatenate(leaves, axis=0), *pytrees)
+    return jax.tree_map(lambda *leaves: onp.concatenate(leaves, axis=0), *pytrees)
 
 
 @onp.vectorize

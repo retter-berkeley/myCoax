@@ -5,7 +5,7 @@ import jax
 import jax.numpy as jnp
 import numpy as onp
 import haiku as hk
-from gym.spaces import Space, Discrete
+from gymnasium.spaces import Space, Discrete
 
 from ..utils import safe_sample, batch_to_single, jit
 from .base_func import BaseFunc, ExampleData, Inputs, ArgsType1, ArgsType2, ModelTypes
@@ -21,9 +21,9 @@ class BaseStochasticFuncType1(BaseFunc):
 
     An abstract base class for stochastic functions that take *state-action pairs* as input:
 
-    - StochasticQ
-    - StochasticTransitionModel
-    - StochasticRewardFunction
+    * StochasticQ
+    * StochasticTransitionModel
+    * StochasticRewardFunction
 
     """
     def __init__(
@@ -158,7 +158,7 @@ class BaseStochasticFuncType1(BaseFunc):
 
         def type2_func(type1_params, type1_state, rng, S, is_training):
             rngs = hk.PRNGSequence(rng)
-            batch_size = jax.tree_leaves(S)[0].shape[0]
+            batch_size = jax.tree_util.tree_leaves(S)[0].shape[0]
 
             # example: let S = [7, 2, 5, 8] and num_actions = 3, then
             # S_rep = [7, 7, 7, 2, 2, 2, 5, 5, 5, 8, 8, 8]  # repeated
@@ -188,7 +188,7 @@ class BaseStochasticFuncType1(BaseFunc):
             s       &\mapsto p(s'|s,.)  &\qquad (\text{modeltype} &= 2)
 
         Note that modeltype=2 is only well-defined if the action space is :class:`Discrete
-        <gym.spaces.Discrete>`. Namely, :math:`n` is the number of discrete actions.
+        <gymnasium.spaces.Discrete>`. Namely, :math:`n` is the number of discrete actions.
 
         """
         return self._modeltype
@@ -200,11 +200,12 @@ class BaseStochasticFuncType1(BaseFunc):
 
         if not isinstance(env.observation_space, Space):
             raise TypeError(
-                "env.observation_space must be derived from gym.Space, "
+                "env.observation_space must be derived from gymnasium.Space, "
                 f"got: {type(env.observation_space)}")
         if not isinstance(env.action_space, Space):
             raise TypeError(
-                f"env.action_space must be derived from gym.Space, got: {type(env.action_space)}")
+                "env.action_space must be derived from gymnasium.Space, "
+                f"got: {type(env.action_space)}")
 
         rnd = onp.random.RandomState(random_seed)
         rngs = hk.PRNGSequence(rnd.randint(jnp.iinfo('int32').max))
@@ -217,12 +218,12 @@ class BaseStochasticFuncType1(BaseFunc):
         # input: state observations
         S = [safe_sample(env.observation_space, rnd) for _ in range(batch_size)]
         S = [observation_preprocessor(next(rngs), s) for s in S]
-        S = jax.tree_multimap(lambda *x: jnp.concatenate(x, axis=0), *S)
+        S = jax.tree_map(lambda *x: jnp.concatenate(x, axis=0), *S)
 
         # input: actions
         A = [safe_sample(env.action_space, rnd) for _ in range(batch_size)]
         A = [action_preprocessor(next(rngs), a) for a in A]
-        A = jax.tree_multimap(lambda *x: jnp.concatenate(x, axis=0), *A)
+        A = jax.tree_map(lambda *x: jnp.concatenate(x, axis=0), *A)
 
         # output: type1
         dist_params_type1 = jax.tree_map(
@@ -409,8 +410,8 @@ class BaseStochasticFuncType1(BaseFunc):
         return example_data
 
     def _check_output(self, actual, expected):
-        expected_leaves, expected_structure = jax.tree_flatten(expected)
-        actual_leaves, actual_structure = jax.tree_flatten(actual)
+        expected_leaves, expected_structure = jax.tree_util.tree_flatten(expected)
+        actual_leaves, actual_structure = jax.tree_util.tree_flatten(actual)
         assert all(isinstance(x, jnp.ndarray) for x in expected_leaves), "bad example_data"
 
         if actual_structure != expected_structure:
@@ -425,7 +426,7 @@ class BaseStochasticFuncType1(BaseFunc):
                 f"found leaves of type: {bad_types}")
 
         if not all(a.shape == b.shape for a, b in zip(actual_leaves, expected_leaves)):
-            shapes_tree = jax.tree_multimap(
+            shapes_tree = jax.tree_map(
                 lambda a, b: f"{a.shape} {'!=' if a.shape != b.shape else '=='} {b.shape}",
                 actual, expected)
             raise TypeError(f"found leaves with unexpected shapes: {shapes_tree}")

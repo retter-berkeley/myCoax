@@ -1,5 +1,5 @@
 import coax
-import gym
+import gymnasium
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -11,7 +11,7 @@ from coax.value_losses import mse
 name = 'a2c'
 
 # the cart-pole MDP
-env = gym.make('CartPole-v0')
+env = gymnasium.make('CartPole-v0', render_mode='rgb_array')
 env = coax.wrappers.TrainMonitor(env, name=name, tensorboard_dir=f"./data/tensorboard/{name}")
 
 
@@ -54,15 +54,17 @@ simple_td = coax.td_learning.SimpleTD(v, loss_function=mse, optimizer=optimizer_
 
 # train
 for ep in range(1000):
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a = pi(s)
-        s_next, r, done, info = env.step(a)
-        if done and (t == env.spec.max_episode_steps - 1):
-            r = 1 / (1 - tracer.gamma)
+        s_next, r, done, truncated, info = env.step(a)
 
-        tracer.add(s, a, r, done)
+        # extend last reward as asymptotic best-case return
+        if truncated:
+            r = 1 / (1 - tracer.gamma)  # gamma + gamma^2 + gamma^3 + ... = 1 / (1 - gamma)
+
+        tracer.add(s, a, r, done or truncated)
         while tracer:
             transition_batch = tracer.pop()
             metrics_v, td_error = simple_td.update(transition_batch, return_td_error=True)
@@ -70,7 +72,7 @@ for ep in range(1000):
             env.record_metrics(metrics_v)
             env.record_metrics(metrics_pi)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next

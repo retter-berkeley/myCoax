@@ -6,8 +6,9 @@ from contextlib import AbstractContextManager
 from functools import partial
 from resource import RUSAGE_SELF, getrusage
 
-import gym
-import haiku as hk
+
+import gymnasium
+
 import jax
 import jax.numpy as jnp
 import numpy as onp
@@ -27,9 +28,9 @@ MockEnv = namedtuple('MockEnv', (
 
 
 def DiscreteEnv(random_seed):
-    action_space = gym.spaces.Discrete(3)
+    action_space = gymnasium.spaces.Discrete(3)
     action_space.seed(13 * random_seed)
-    observation_space = gym.spaces.Box(
+    observation_space = gymnasium.spaces.Box(
         low=onp.float32(0), high=onp.float32(1), shape=(17, 19))
     observation_space.seed(11 * random_seed)
     reward_range = (-1., 1.)
@@ -52,7 +53,7 @@ def DiscreteEnv(random_seed):
 
 def BoxEnv(random_seed):
     env = DiscreteEnv(random_seed)._asdict()
-    env['action_space'] = gym.spaces.Box(
+    env['action_space'] = gymnasium.spaces.Box(
         low=onp.float32(0), high=onp.float32(1), shape=(3, 5))
     env['action_space'].seed(7 * random_seed)
     return MockEnv(**env)
@@ -266,7 +267,7 @@ class TestCase(unittest.TestCase):
                 hk.Linear(self.env_discrete.action_space.n * 51),
                 hk.Reshape((self.env_discrete.action_space.n, 51))
             ))
-            return seq(flatten(S))
+            return {'logits': seq(flatten(S))}
         return func
 
     @property
@@ -349,15 +350,15 @@ class TestCase(unittest.TestCase):
 
     def assertPytreeAlmostEqual(self, x, y, decimal=None):
         decimal = decimal or self.decimal
-        jax.tree_multimap(
+        jax.tree_map(
             lambda x, y: onp.testing.assert_array_almost_equal(
                 x, y, decimal=decimal), x, y)
 
     def assertPytreeNotEqual(self, x, y, margin=None):
         margin = margin or self.margin
-        reldiff = jax.tree_multimap(
+        reldiff = jax.tree_map(
             lambda a, b: abs(2 * (a - b) / (a + b + 1e-16)), x, y)
-        maxdiff = max(jnp.max(d) for d in jax.tree_leaves(reldiff))
+        maxdiff = max(jnp.max(d) for d in jax.tree_util.tree_leaves(reldiff))
         assert float(maxdiff) > margin
 
     def assertArraySubdtypeFloat(self, arr):

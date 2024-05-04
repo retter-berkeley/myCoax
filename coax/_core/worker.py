@@ -3,7 +3,7 @@ import inspect
 from abc import ABC, abstractmethod
 from typing import Optional
 
-import gym
+import gymnasium
 from jax.lib.xla_bridge import get_backend
 
 from ..typing import Policy
@@ -28,10 +28,10 @@ class Worker(ABC):
 
     Parameters
     ----------
-    env : gym.Env | str | function
+    env : gymnasium.Env | str | function
 
-        Specifies the gym-style environment by either passing the env itself (gym.Env), its name
-        (str), or a function that generates the environment.
+        Specifies the gymnasium-style environment by either passing the env itself (gymnasium.Env),
+        its name (str), or a function that generates the environment.
 
     param_store : Worker, optional
 
@@ -163,14 +163,14 @@ class Worker(ABC):
 
     def rollout(self):
         assert self.pi is not None
-        s = self.env.reset()
+        s, info = self.env.reset()
         for t in range(self.env.spec.max_episode_steps):
             a, logp = self.pi(s, return_logp=True)
-            s_next, r, done, info = self.env.step(a)
+            s_next, r, done, truncated, info = self.env.step(a)
 
-            self.trace(s, a, r, done, logp)
+            self.trace(s, a, r, done or truncated, logp)
 
-            if done:
+            if done or truncated:
                 break
 
             s = s_next
@@ -305,20 +305,20 @@ class Worker(ABC):
 
 
 def _check_env(env, name):
-    if isinstance(env, gym.Env):
+    if isinstance(env, gymnasium.Env):
         pass
     elif isinstance(env, str):
-        env = gym.make(env)
+        env = gymnasium.make(env)
     elif hasattr(env, '__call__'):
         env = env()
     else:
-        raise TypeError(f"env must be a gym.Env, str or callable; got: {type(env)}")
+        raise TypeError(f"env must be a gymnasium.Env, str or callable; got: {type(env)}")
 
     if getattr(getattr(env, 'spec', None), 'max_episode_steps', None) is None:
         raise ValueError(
             "env.spec.max_episode_steps not set; please register env with "
-            "gym.register('Foo-v0', entry_point='foo.Foo', max_episode_steps=...) "
-            "or wrap your env with: env = gym.wrappers.TimeLimit(env, max_episode_steps=...)")
+            "gymnasium.register('Foo-v0', entry_point='foo.Foo', max_episode_steps=...) "
+            "or wrap your env with: env = gymnasium.wrappers.TimeLimit(env, max_episode_steps=...)")
 
     if not isinstance(env, TrainMonitor):
         env = TrainMonitor(env, name=name, log_all_metrics=True)

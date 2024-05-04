@@ -1,7 +1,7 @@
 coax
 ====
 
-*Plug-n-play Reinforcement Learning in Python with OpenAI Gym and JAX*
+*Plug-n-play Reinforcement Learning in Python with Gymnasium and JAX*
 
 
 .. image:: /_static/img/cartpole.gif
@@ -9,8 +9,8 @@ coax
     :align: center
 
 
-Coax is a modular Reinforcement Learning (RL) python package for solving OpenAI Gym environments
-with JAX-based function approximators.
+Coax is a modular Reinforcement Learning (RL) python package for solving Gymnasium
+(formerly OpenAI Gym) environments with JAX-based function approximators.
 
 
 Install
@@ -30,7 +30,7 @@ Once ``jax`` and ``jaxlib`` are installed, you can install **coax** simple by ru
 Or, alternatively, to install **coax** from the latest branch on github:
 
 .. code::
-    
+
     $ pip install git+https://github.com/coax-dev/coax.git@main
 
 
@@ -113,11 +113,11 @@ function:
 
 .. code:: python
 
-    import gym
+    import gymnasium
     import coax
     import haiku as hk
 
-    env = gym.make('FrozenLakeNonSlippery-v0')
+    env = gymnasium.make('FrozenLakeNonSlippery-v0')
     env = coax.wrappers.TrainMonitor(env)
 
     def func(S, is_training):
@@ -181,11 +181,11 @@ we have our policy, we can start doing episode roll-outs:
 
 .. code:: python
 
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a = pi(s)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # this is where we should update our q-function
         ...
@@ -213,19 +213,19 @@ how this works in practice.
 
     for ep in range(500):
         pi.epsilon *= 0.99  # reduce exploration over time
-        s = env.reset()
+        s, info = env.reset()
 
         for t in range(env.spec.max_episode_steps):
             a = pi(s)
-            s_next, r, done, info = env.step(a)
+            s_next, r, done, truncated, info = env.step(a)
 
             # trace and update
-            tracer.add(s, a, r, done)
+            tracer.add(s, a, r, done or truncated)
             while tracer:
                 transition_batch = tracer.pop()
                 qlearning.update(transition_batch)
 
-            if done:
+            if done or truncated:
                 break
 
             s = s_next
@@ -274,6 +274,7 @@ If this ain't your first rodeo, head over the examples listed :doc:`here <exampl
     examples/cartpole/index
     examples/frozen_lake/index
     examples/pendulum/index
+    examples/dmc/index
 
 
 .. toctree::

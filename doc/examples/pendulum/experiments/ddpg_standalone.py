@@ -14,7 +14,7 @@ from collections import deque
 from functools import partial
 from copy import deepcopy
 
-import gym
+import gymnasium
 import numpy as onp
 import jax
 import jax.numpy as jnp
@@ -65,7 +65,7 @@ coax.utils.enable_logging(experiment_id)
 
 
 # the MDP
-env = gym.make('Pendulum-v0')
+env = gymnasium.make('Pendulum-v1', render_mode='rgb_array')
 env = coax.wrappers.BoxActionsToReals(env)
 env = coax.wrappers.TrainMonitor(env, tensorboard_dir)
 
@@ -156,7 +156,7 @@ target_params_q = deepcopy(params_q)
 
 @jax.jit
 def soft_update(target_params, primary_params, tau=1.0):
-    return jax.tree_multimap(lambda a, b: a + tau * (b - a), target_params, primary_params)
+    return jax.tree_map(lambda a, b: a + tau * (b - a), target_params, primary_params)
 
 
 ####################################################################################################
@@ -258,11 +258,11 @@ def sample_action(s, with_noise=False):
 
 for _ in range(hparams.num_episodes):
     noise_state = noise_init_state  # reset noise state
-    s = env.reset()
+    s, info = env.reset()
 
     for t in range(env.spec.max_episode_steps):
         a = sample_action(s, with_noise=True)
-        s_next, r, done, info = env.step(a)
+        s_next, r, done, truncated, info = env.step(a)
 
         # add to replay buffer
         add_to_memory(s, a, r, done, s_next)
@@ -276,7 +276,7 @@ for _ in range(hparams.num_episodes):
             target_params_pi = soft_update(target_params_pi, params_pi, hparams.tau)
             target_params_q = soft_update(target_params_q, params_q, hparams.tau)
 
-        if done:
+        if done or truncated:
             break
 
         s = s_next

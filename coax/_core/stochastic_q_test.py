@@ -4,7 +4,7 @@ from collections import namedtuple
 import jax
 import jax.numpy as jnp
 import haiku as hk
-from gym.spaces import Discrete, Box
+from gymnasium.spaces import Discrete, Box
 
 from .._base.test_case import TestCase
 from ..utils import safe_sample, quantile_cos_embedding, quantiles, quantiles_uniform
@@ -65,7 +65,7 @@ def func_quantile_type1(S, A, is_training):
     encoder = hk.Sequential((
         hk.Flatten(), hk.Linear(8), jax.nn.relu
     ))
-    quantile_fractions = quantiles(batch_size=jax.tree_leaves(S)[0].shape[0],
+    quantile_fractions = quantiles(batch_size=jax.tree_util.tree_leaves(S)[0].shape[0],
                                    num_quantiles=num_bins)
     X = jax.vmap(jnp.kron)(S, A)
     x = encoder(X)
@@ -81,7 +81,7 @@ def func_quantile_type2(S, is_training):
         hk.Flatten(), hk.Linear(8), jax.nn.relu
     ))
     quantile_fractions = quantiles_uniform(rng=hk.next_rng_key(),
-                                           batch_size=jax.tree_leaves(S)[0].shape[0],
+                                           batch_size=jax.tree_util.tree_leaves(S)[0].shape[0],
                                            num_quantiles=num_bins)
     x = encoder(S)
     quantile_x = quantile_net(x, quantile_fractions=quantile_fractions)
@@ -90,7 +90,7 @@ def func_quantile_type2(S, is_training):
         hk.Reshape((discrete.n, num_bins))
     ))(quantile_x)
     return {'values': quantile_values,
-            'quantile_fractions': quantile_fractions[:, None, :].tile([1, discrete.n, 1])}
+            'quantile_fractions': jnp.tile(quantile_fractions[:, None, :], [1, discrete.n, 1])}
 
 
 class TestStochasticQ(TestCase):

@@ -17,7 +17,7 @@ nb_template = {
             "metadata": {},
             "outputs": [],
             "source": [
-                "%pip install git+https://github.com/coax-dev/coax.git@main",
+                "%pip install git+https://github.com/coax-dev/coax.git@main --quiet",
             ]
         },
         {
@@ -47,8 +47,24 @@ nb_template = {
             "version": "3.8.2"
         }
     },
+    "colab": {
+        "name": None,
+        "provenance": []
+    },
     "nbformat": 4,
     "nbformat_minor": 2
+}
+
+sdl_videodriver_cell = {
+    "cell_type": "code",
+    "execution_count": None,
+    "metadata": {},
+    "outputs": [],
+    "source": [
+        "# Run this cell to fix rendering errors.\n",
+        "import os\n",
+        "os.environ['SDL_VIDEODRIVER'] = 'dummy'",
+    ]
 }
 
 tensorboard_cell = {
@@ -78,9 +94,14 @@ for d_in in glob(os.path.join(PACKAGEDIR, 'doc', 'examples', '*')):
 
         with open(f_in) as r, open(f'{f_out}', 'w') as w:
             lines = list(r)
-            nb['cells'][-1]['source'] = lines  # the actual code
+            nb['colab']['name'] = os.path.split(f_out)[1]
+            nb['cells'][-1]['source'] = lines
+            if any(("CartPole-v" in line or "Pendulum-v" in line) for line in lines):
+                nb['cells'].insert(1, sdl_videodriver_cell)
             if any("tensorboard_dir=" in line for line in lines):
                 nb['cells'].insert(1, tensorboard_cell)
+            if 'atari' in f_in:
+                nb['accelerator'] = 'GPU'
             json.dump(nb, w, indent=1)
 
         print(f"converted: {f_in} --> {f_out}")
